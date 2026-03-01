@@ -16,7 +16,7 @@ class Sequence:
     counter = count()
 
     def __init__(self, token_ids: list[int], sampling_params = SamplingParams()):
-        self.seq_id = next(Sequence.counter)
+        self.seq_id = next(Sequence.counter) # Unique ID, e.g. 0, 1, 2, ...
         self.status = SequenceStatus.WAITING
         self.token_ids = copy(token_ids)
         self.last_token = token_ids[-1]
@@ -25,7 +25,9 @@ class Sequence:
         self.num_cached_tokens = 0
         self.num_scheduled_tokens = 0
         self.is_prefill = True
-        self.block_table = []
+        # list of block indices that have been cached, e.g. [0, 1] means tokens
+        # in block 0 and 1 are cached.
+        self.block_table = [] # no KV cache blocks yet.
         self.temperature = sampling_params.temperature
         self.max_tokens = sampling_params.max_tokens
         self.ignore_eos = sampling_params.ignore_eos

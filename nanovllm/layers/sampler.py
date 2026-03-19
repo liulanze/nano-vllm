@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 
+# Turning Logits into Token IDs.
 class Sampler(nn.Module):
 
     def __init__(self):

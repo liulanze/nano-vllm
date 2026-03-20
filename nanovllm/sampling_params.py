@@ -4,6 +4,7 @@ from dataclasses import dataclass
 @dataclass
 class SamplingParams:
     temperature: float = 1.0
+    # In postprocess the sequence is stopped when it's generated that many tokens
     max_tokens: int = 64
     ignore_eos: bool = False
 

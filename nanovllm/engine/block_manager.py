@@ -66,27 +66,35 @@ class BlockManager:
         assert not seq.block_table
         h = -1
         cache_miss = False
-        for i in range(seq.num_blocks):
-            token_ids = seq.block(i)
+        for i in range(seq.num_blocks): # for each logical block this sequence needs
+            token_ids = seq.block(i) # get the actual tokens in this block
+            # For each block, compute its content hash (only for full blocks —
+            # partial last blocks get hash -1):
             h = self.compute_hash(token_ids, h) if len(token_ids) == self.block_size else -1
+            # Try to find this hash in the cache
             block_id = self.hash_to_block_id.get(h, -1)
+            # Interesting that even though self.hash_to_block_id never released,
+            # but if block_id taken by sth else first, then we just treat it as
+            # cache miss.
             if block_id == -1 or self.blocks[block_id].token_ids != token_ids:
                 cache_miss = True
             if cache_miss:
                 block_id = self.free_block_ids[0]
-                block = self._allocate_block(block_id)
+                block = self._allocate_block(block_id)   # grab fresh block
             else:
-                seq.num_cached_tokens += self.block_size
+                seq.num_cached_tokens += self.block_size # cache hit! skip 256 tokens.
                 if block_id in self.used_block_ids:
                     block = self.blocks[block_id]
-                    block.ref_count += 1
+                    block.ref_count += 1                 # another sequence sharing this block.
                 else:
-                    block = self._allocate_block(block_id)
+                    block = self._allocate_block(block_id) # was free, now allocate it.
+            # Register the hash for future lookups and add block to the sequence's page table.
             if h != -1:
                 block.update(h, token_ids)
                 self.hash_to_block_id[h] = block_id
             seq.block_table.append(block_id)
 
+    # Freeing blocks.
     def deallocate(self, seq: Sequence):
         for block_id in reversed(seq.block_table):
             block = self.blocks[block_id]
@@ -96,9 +104,11 @@ class BlockManager:
         seq.num_cached_tokens = 0
         seq.block_table.clear()
 
+    # Check if we have memory, do we have enough free blocks to continue?
     def can_append(self, seq: Sequence) -> bool:
         return len(self.free_block_ids) >= (len(seq) % self.block_size == 1)
 
+    # Manage block allocation and hashing.
     def may_append(self, seq: Sequence):
         block_table = seq.block_table
         last_block = self.blocks[block_table[-1]]

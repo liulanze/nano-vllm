@@ -63,12 +63,18 @@ class BlockManager:
 
     def can_allocate(self, seq: Sequence) -> int:
         h = -1
+<<<<<<< HEAD
         num_cached_blocks = 0
         num_new_blocks = seq.num_blocks
         for i in range(seq.num_blocks - 1):
-            token_ids = seq.block(i)
+            token_ids = seq.block(i) # get the actual tokens in this block
+            # Compute content hash (chained — each hash includes the previous block's hash)
             h = self.compute_hash(token_ids, h)
+            # Try to find this hash in the cache
             block_id = self.hash_to_block_id.get(h, -1)
+            # Interesting that even though self.hash_to_block_id never released,
+            # but if block_id taken by sth else first, then we just treat it as
+            # cache miss.
             if block_id == -1 or self.blocks[block_id].token_ids != token_ids:
                 break
             num_cached_blocks += 1
@@ -87,7 +93,7 @@ class BlockManager:
             block_id = self.hash_to_block_id[h]
             block = self.blocks[block_id]
             if block_id in self.used_block_ids:
-                block.ref_count += 1
+                block.ref_count += 1                 # another sequence sharing this block.
             else:
                 block.ref_count = 1
                 self.free_block_ids.remove(block_id)
@@ -97,6 +103,7 @@ class BlockManager:
             seq.block_table.append(self._allocate_block())
         seq.num_cached_tokens = num_cached_blocks * self.block_size
 
+    # Freeing blocks.
     def deallocate(self, seq: Sequence):
         for block_id in reversed(seq.block_table):
             block = self.blocks[block_id]
@@ -106,9 +113,11 @@ class BlockManager:
         seq.num_cached_tokens = 0
         seq.block_table.clear()
 
+    # Check if we have memory, do we have enough free blocks to continue?
     def can_append(self, seq: Sequence) -> bool:
         return len(self.free_block_ids) >= (len(seq) % self.block_size == 1)
 
+    # Manage block allocation and hashing.
     def may_append(self, seq: Sequence):
         if len(seq) % self.block_size == 1:
             seq.block_table.append(self._allocate_block())

@@ -17,16 +17,31 @@ class Sequence:
     counter = count()
 
     def __init__(self, token_ids: list[int], sampling_params = SamplingParams()):
-        self.seq_id = next(Sequence.counter) # Unique ID, e.g. 0, 1, 2, ...
-        self.status = SequenceStatus.WAITING
-        self.token_ids = copy(token_ids)
-        self.last_token = token_ids[-1]
-        self.num_tokens = len(self.token_ids)
+        self.seq_id = next(Sequence.counter) # Unique ID, e.g. 0, 1, 2, ... global auto-increment
+        """
+        self.status — A sequence moves through three states:
+        WAITING → RUNNING → FINISHED
+            ↑  ↓
+            └──┘  (can be preempted back to WAITING)
+        """
+        self.status = SequenceStatus.WAITING # starts as WAITING
+        self.token_ids = copy(token_ids)     # full token list (prompt + generated)
+        self.last_token = token_ids[-1]      # most recent token, for decode input.
+        self.num_tokens = len(self.token_ids) # total length so far
+        # This is how the system knows where the prompt ends and the completion begins.
+        # fixed, how many tokens in the original prompt.
         self.num_prompt_tokens = len(token_ids)
         # how many tokens were found in prefix cache.
         self.num_cached_tokens = 0
-        # list of block indices that have been cached, e.g. [0, 1] means tokens
-        # in block 0 and 1 are cached.
+        # This is the page table, just like in an operating system. It maps
+        # logical blocks to physical KV cache blocks on the GPU:
+        """
+        block_table = [5, 12, 3]
+        Means:
+        Logical block 0 (tokens 0-255)   → physical block 5 on GPU
+        Logical block 1 (tokens 256-511) → physical block 12 on GPU  
+        Logical block 2 (tokens 512-...)  → physical block 3 on GPU
+        """
         self.block_table = [] # list of physical block IDs.
         self.temperature = sampling_params.temperature
         self.max_tokens = sampling_params.max_tokens
@@ -62,14 +77,17 @@ class Sequence:
     def num_blocks(self):
         return (self.num_tokens + self.block_size - 1) // self.block_size
 
+    # e.g. 300 tokens, 2 blocks: 300 - 1*256 = 44 tokens in the last block
     @property
     def last_block_num_tokens(self):
         return self.num_tokens - (self.num_blocks - 1) * self.block_size
 
+    # returns the actual token IDs in block i, used for prefix cache hashing
     def block(self, i):
         assert 0 <= i < self.num_blocks
         return self.token_ids[i*self.block_size: (i+1)*self.block_size]
 
+    # Called after each decode step
     def append_token(self, token_id: int):
         self.token_ids.append(token_id)
         self.last_token = token_id

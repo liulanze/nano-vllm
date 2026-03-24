@@ -6,6 +6,7 @@ import torch.distributed as dist
 from nanovllm.utils.context import get_context
 
 
+# Token ID to Vector (entry point)
 class VocabParallelEmbedding(nn.Module):
 
     def __init__(
@@ -50,6 +51,7 @@ class VocabParallelEmbedding(nn.Module):
         return y
 
 
+# Vector to Logits (exit point)
 class ParallelLMHead(VocabParallelEmbedding):
 
     def __init__(

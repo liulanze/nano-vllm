@@ -25,7 +25,10 @@ def main():
             tokenize=False,
             # Append generation prompt to the end of the user prompt, so that
             # the model can better understand where to start generating. For
-            # Qwen, append `<|im_start|>assistant\n` to the end of the user prompt.
+            # Qwen, append `<|im_start|>assistant\n` to the end of the user
+            # prompt. The reason this is needed is During chat fine-tuning, the
+            # model was trained on data formatted with a specific conversation
+            # protocol/role (like user/assistant/system, etc.).
             add_generation_prompt=True,
         )
         for prompt in prompts

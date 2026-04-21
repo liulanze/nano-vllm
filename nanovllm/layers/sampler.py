@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 
-# Turning Logits into Token IDs.
+# class for turning Logits into Token IDs.
 class Sampler(nn.Module):
 
     @torch.compile
@@ -21,8 +21,8 @@ class Sampler(nn.Module):
         The Gumbel-max trick works like this:
         1. torch.empty_like(probs).exponential_(1) — Generate random noise from an
         exponential distribution. Each vocab entry gets a random number.
-        2. .clamp_min_(1e-10) — Prevent division by zero. 
-        3. probs.div_(noise) — Divide probabilities by the random noise. 
+        2. .clamp_min_(1e-10) — Prevent division by zero.
+        3. probs.div_(noise) — Divide probabilities by the random noise.
         4. .argmax(dim=-1) — Pick the index with the highest value.
 
         Why does this work? Mathematically, if you divide probabilities by

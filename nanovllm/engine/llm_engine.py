@@ -15,10 +15,12 @@ class LLMEngine:
     def __init__(self, model, **kwargs):
         # 1. Build Config from kwargs. Use fields to return metadata about each
         # dataclass field. Can be not only the field name, e.g. each element in
-        # that list contains infor like field name, type, default value, etc.
+        # that list contains info like field name, type, default value, etc.
         config_fields = {field.name for field in fields(Config)}
         config_kwargs = {k: v for k, v in kwargs.items() if k in config_fields}
         config = Config(model, **config_kwargs)
+        # Introduce the config value into the Sequence class so every Sequence
+        # can compute its own block layout.
         Sequence.block_size = config.kvcache_block_size
         # Init worker processes (do the work) and their sync events (coordinate the work).
         self.ps = []
@@ -58,7 +60,10 @@ class LLMEngine:
         # 3. Create rank-0 ModelRunner (loads model, warmup forward pass,
         #    allocates KV cache, captures CUDA graphs)
         self.model_runner = ModelRunner(config, 0, self.events)
-        # 4. Load tokenizer.
+        # 4. Load tokenizer, not like the one under example.py, here does the
+        #    real work encode/decode. Look at llm_engine.py — generate() calls
+        #    self.tokenizer.encode() on input and self.tokenizer.decode() on
+        #    output.
         self.tokenizer = AutoTokenizer.from_pretrained(config.model, 
                                                        use_fast=True # Use fast tokenizer for better performance.
         )

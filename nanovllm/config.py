@@ -29,7 +29,7 @@ class Config:
     # (3) Each launch has overhead (Python + framework + driver)
     # (4) Repeat for the next token
     # In decode, you might do this THOUSANDS of times (one token at a time)
-    # CUDA gGraphs let you:
+    # CUDA Graphs let you:
     # (1) Run one decode step once to record the exact GPU kernel sequence
     # (2) Save it as a "graph"
     # (3) For each subsequent token step, just replay the graph.

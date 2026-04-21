@@ -24,12 +24,15 @@ class ModelRunner:
         self.event = event
 
         # 1. Initialize distributed (NCCL) - this is a collective operations,
-        #    all ranks must call it before release the barrier.
+        #    all ranks must call it before release the barrier. Init Process Group.
         dist.init_process_group("nccl", "tcp://localhost:2333", world_size=self.world_size, rank=rank)
         torch.cuda.set_device(rank)
         # 2. Set default dtype and device, then build model skeleton.
         default_dtype = torch.get_default_dtype() # e.g., bfloat16
         torch.set_default_dtype(hf_config.dtype)
+        # The torch.set_default_device("cuda") is active only during those
+        # initialization steps so that everything created in that phase
+        # automatically lands on GPU.
         torch.set_default_device("cuda")
         # 2.1 Build model skeleton:
         # PyTorch can NOT load model directly into layers, it first needs to
@@ -38,8 +41,9 @@ class ModelRunner:
         # 3. Load wrights from safetensors files.
         load_model(self.model, config.model)
         self.sampler = Sampler()
-        # 4. Warmup - run a dummy forward pass at max capacity.
-        # Reasons for warmup: (a) measure peak activation memory. (b) trigger PyTorch/CUDA lazy initializaton.
+        # 4. Warmup - run a dummy forward pass at max capacity. Reasons for
+        # warmup: (a) measure peak activation memory. (b) trigger PyTorch/CUDA
+        # lazy initializaton.
         self.warmup_model()
         # 5. Allocate KV cache - uses peak memory from warmup to calculate how many blocks fit.
         '''
@@ -48,7 +52,7 @@ class ModelRunner:
         GPU total memory:            8,192 MB
         gpu_memory_utilization:      0.9  →  7,373 MB usable
         Model weights (bfloat16):    ~1,200 MB
-        Peak activations (warmup):   ~800 MB
+        Peak activations (warmup):   ~800 MB # There's a third category of GPU memory beyond weights and KV cache: activations. Activations are the intermediate tensors created during the forward pass.
         ───────────────────────────────────
         Available for KV cache:      ~5,373 MB
 
@@ -87,6 +91,8 @@ class ModelRunner:
           num_attention_heads = 16
           head_dim = hidden_size / num_attention_heads = 1024 / 16 = 64
         '''
+        # one shared pool for all sequence, fyi.
+        # pre-allocates one big contiguous GPU tensor for the entire KV cache upfront.
         self.allocate_kv_cache()
         if not self.enforce_eager:
             # 6. Capture CUDA graphs for decode with different batch sizes.
@@ -94,6 +100,19 @@ class ModelRunner:
         torch.set_default_device("cpu")
         torch.set_default_dtype(default_dtype)
 
+        '''
+        Below is for tensor parallelism (multi-GPU). Rank 0 (main process) needs
+        to tell worker processes (rank 1, 2, ...) what to do each step — "here
+        are the sequences to run, here's the metadata." But they're separate OS
+        processes.
+
+        SharedMemory creates a 1MB block of RAM that all processes can
+        read/write directly — rank 0 writes the scheduling data there, workers
+        read it. It's much faster than sending messages over sockets or pipes.
+
+        The barrier() ordering ensures rank 0 creates the shared memory before
+        workers try to open it.
+        '''
         if self.world_size > 1:
             if rank == 0:
                 self.shm = SharedMemory(name="nanovllm", create=True, size=2**20)

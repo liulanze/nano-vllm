@@ -25,13 +25,14 @@ class Block:
         self.token_ids = []
 
 
+# Think of BlockManager as an OS-level page table manager.
 class BlockManager:
 
     def __init__(self, num_blocks: int, block_size: int):
         self.block_size = block_size # number of tokens in each block, e.g. 256
         self.blocks: list[Block] = [Block(i) for i in range(num_blocks)] # all physical blocks.
         # hash -> block_id lookup, so the hash is per block / page.
-        self.hash_to_block_id: dict[int, int] = dict()
+        self.hash_to_block_id: dict[int, int] = dict() # Python dict, saved in CPU
         self.free_block_ids: deque[int] = deque(range(num_blocks)) # free available blocks.
         self.used_block_ids: set[int] = set() # in-use blocks.
 
@@ -70,7 +71,10 @@ class BlockManager:
             token_ids = seq.block(i) # get the actual tokens in this block
             # For each block, compute its content hash (only for full blocks —
             # partial last blocks get hash -1):
-            h = self.compute_hash(token_ids, h) if len(token_ids) == self.block_size else -1
+            h = self.compute_hash(
+                                token_ids, 
+                                h, # hash chaining, contain previous block's hash
+                                ) if len(token_ids) == self.block_size else -1
             # Try to find this hash in the cache
             block_id = self.hash_to_block_id.get(h, -1)
             # Interesting that even though self.hash_to_block_id never released,
@@ -82,7 +86,7 @@ class BlockManager:
                 block_id = self.free_block_ids[0]
                 block = self._allocate_block(block_id)   # grab fresh block
             else:
-                seq.num_cached_tokens += self.block_size # cache hit! skip 256 tokens.
+                seq.num_cached_tokens += self.block_size # cache hit! skip 256 tokens during prefill.
                 if block_id in self.used_block_ids:
                     block = self.blocks[block_id]
                     block.ref_count += 1                 # another sequence sharing this block.

@@ -38,7 +38,7 @@ class ModelRunner:
         # PyTorch can NOT load model directly into layers, it first needs to
         # know the shape of each weight tensor.
         self.model = Qwen3ForCausalLM(hf_config) # empty model, weights will be loaded later.
-        # 3. Load wrights from safetensors files.
+        # 3. Load weights from safetensors files.
         load_model(self.model, config.model)
         self.sampler = Sampler()
         # 4. Warmup - run a dummy forward pass at max capacity. Reasons for

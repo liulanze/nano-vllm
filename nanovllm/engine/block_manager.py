@@ -25,13 +25,14 @@ class Block:
         self.token_ids = []
 
 
+# Think of BlockManager as an OS-level page table manager.
 class BlockManager:
 
     def __init__(self, num_blocks: int, block_size: int):
         self.block_size = block_size # number of tokens in each block, e.g. 256
         self.blocks: list[Block] = [Block(i) for i in range(num_blocks)] # all physical blocks.
         # hash -> block_id lookup, so the hash is per block / page.
-        self.hash_to_block_id: dict[int, int] = dict()
+        self.hash_to_block_id: dict[int, int] = dict() # Python dict, saved in CPU
         self.free_block_ids: deque[int] = deque(range(num_blocks)) # free available blocks.
         self.used_block_ids: set[int] = set() # in-use blocks.
 
@@ -63,7 +64,6 @@ class BlockManager:
 
     def can_allocate(self, seq: Sequence) -> int:
         h = -1
-<<<<<<< HEAD
         num_cached_blocks = 0
         num_new_blocks = seq.num_blocks
         for i in range(seq.num_blocks - 1):

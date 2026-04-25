@@ -5,6 +5,8 @@ from nanovllm.engine.sequence import Sequence, SequenceStatus
 from nanovllm.engine.block_manager import BlockManager
 
 
+# The Scheduler decides what work to do each step: which sequences to run,
+# whether to prefill or decode, and handles memory pressure via preemption.
 class Scheduler:
 
     def __init__(self, config: Config):
@@ -13,8 +15,8 @@ class Scheduler:
         self.eos = config.eos # end of sequence token id
         self.block_size = config.kvcache_block_size
         self.block_manager = BlockManager(config.num_kvcache_blocks, config.kvcache_block_size)
-        self.waiting: deque[Sequence] = deque() # Sequences that need prefill (haven't started generating yet)
-        self.running: deque[Sequence] = deque() # Sequences currently generating tokens (in decode phase)
+        self.waiting: deque[Sequence] = deque() # sequences needing prefill (not started or preempted)
+        self.running: deque[Sequence] = deque() # sequences in decode phase (actively generating)
 
     def is_finished(self):
         return not self.waiting and not self.running
@@ -37,10 +39,11 @@ class Scheduler:
                 num_cached_blocks = self.block_manager.can_allocate(seq)
                 if num_cached_blocks == -1:
                     break
+                # Calculate num_tokens accounting for prefix cache hits
                 num_tokens = seq.num_tokens - num_cached_blocks * self.block_size
             else:
-                # Re-calculate num_tokens after allocate(), as prefix caching may update
-                # seq.num_cached_tokens during the allocation process.
+                # Re-calculate num_tokens after allocate(), as prefix caching may
+                # update seq.num_cached_tokens during the allocation process.
                 num_tokens = seq.num_tokens - seq.num_cached_tokens
             if remaining < num_tokens and scheduled_seqs:  # only allow chunked prefill for the first seq
                 break

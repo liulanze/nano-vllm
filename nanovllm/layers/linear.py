@@ -119,7 +119,9 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
 # Fused Q, K, V
 
 # Same idea as MergedColumn, but for attention's Q, K, V projections. The
-# wrinkle is that Q and KV can have different numbers of heads (GQA):
+# wrinkle is that Q and KV can have different numbers of heads (GQA): K and V
+# have fewer heads than Q — this is Grouped-Query Attention (GQA). Every 2 Q
+# heads share 1 KV head. Saves memory (less KV cache) with minimal quality loss.
 """
 With 16 Q heads, 8 KV heads, head_dim=64:
   Q: 16 × 64 = 1024

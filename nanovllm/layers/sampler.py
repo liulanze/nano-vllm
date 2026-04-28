@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 
-# class for turning Logits into Token IDs.
+# class for turning Logits into Token IDs. Picking the next token.
 class Sampler(nn.Module):
 
     @torch.compile

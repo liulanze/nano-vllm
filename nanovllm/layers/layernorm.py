@@ -29,6 +29,7 @@ class RMSNorm(nn.Module):
         “But feature 42 should always be louder than feature 17”
         """
 
+    # normalize only (used for first layer, final layer)
     @torch.compile
     def rms_forward(
         self,
@@ -45,6 +46,7 @@ class RMSNorm(nn.Module):
         x = x.to(orig_dtype).mul_(self.weight)    # Back to fp16, scale by learned weight
         return x
 
+    # fuse residual addition + normalization
     @torch.compile
     def add_rms_forward(
         self,

@@ -40,6 +40,8 @@ class VocabParallelEmbedding(nn.Module):
         loaded_weight = loaded_weight.narrow(0, start_idx, shard_size)
         param_data.copy_(loaded_weight) # Copy into GPU memory
 
+    # Each GPU masks out tokens not in its range → embeds only its tokens →
+    # all_reduce sums across GPUs (the non-owner GPUs contribute zeros)
     def forward(self, x: torch.Tensor):
         if self.tp_size > 1:
             mask = (x >= self.vocab_start_idx) & (x < self.vocab_end_idx)

@@ -3,6 +3,7 @@ import torch
 from torch import nn
 
 
+# Inject position information.
 def apply_rotary_emb(
     x: torch.Tensor,
     cos: torch.Tensor,
